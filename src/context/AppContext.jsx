@@ -139,7 +139,19 @@ export const AppProvider = ({ children }) => {
     return saved ? parseFloat(saved) : 0.00;
   });
 
+  const hasEnvConfig = !!(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY);
+
   const [cloudConfig, setCloudConfig] = useState(() => {
+    // Check environment variables first
+    const envUrl = import.meta.env.VITE_SUPABASE_URL || '';
+    const envKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+    const envBucket = import.meta.env.VITE_SUPABASE_BUCKET_NAME || '';
+
+    if (envUrl && envKey) {
+      return { supabaseUrl: envUrl, supabaseKey: envKey, bucketName: envBucket };
+    }
+
+    // Fall back to local storage
     const saved = localStorage.getItem('studyshare_cloud_config');
     return saved ? JSON.parse(saved) : { supabaseUrl: '', supabaseKey: '', bucketName: '' };
   });
@@ -513,6 +525,7 @@ export const AppProvider = ({ children }) => {
       notes,
       platformEarnings,
       cloudConfig,
+      hasEnvConfig,
       toasts,
       reports,
       reportNote,

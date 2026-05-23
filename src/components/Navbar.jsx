@@ -12,6 +12,7 @@ export default function Navbar() {
     logoutUser, 
     depositFunds,
     cloudConfig,
+    hasEnvConfig,
     addToast 
   } = useContext(AppContext);
 
@@ -131,12 +132,14 @@ export default function Navbar() {
             </li>
           )}
 
-          <li 
-            className={`nav-item ${currentPage === 'settings' ? 'active' : ''}`}
-            onClick={() => navigateTo('settings')}
-          >
-            Cloud Settings
-          </li>
+          {!hasEnvConfig && (
+            <li 
+              className={`nav-item ${currentPage === 'settings' ? 'active' : ''}`}
+              onClick={() => navigateTo('settings')}
+            >
+              Cloud Settings
+            </li>
+          )}
         </ul>
 
         <div className="nav-actions">

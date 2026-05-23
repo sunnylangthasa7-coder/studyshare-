@@ -1,4 +1,4 @@
-// StudyShare Notes Marketplace - Production Backend Connected
+// StudyShare Notes Marketplace - Production Backend Connected (Trigger Build 2)
 import React, { useContext } from 'react';
 import { AppContext } from './context/AppContext';
 import Navbar from './components/Navbar';

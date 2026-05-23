@@ -784,6 +784,36 @@ main {
   font-size: 0.9rem;
 }
 
+.footer-link-btn {
+  background: none;
+  border: none;
+  color: #9d8dbd;
+  font-family: var(--font-primary);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  transition: var(--transition-smooth);
+  border-radius: var(--radius-sm);
+}
+
+.footer-link-btn:hover {
+  color: var(--cyan-accent);
+  text-shadow: 0 0 8px rgba(0, 242, 254, 0.4);
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+.prose-content ul {
+  margin-left: 1.5rem;
+  margin-top: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.prose-content li {
+  margin-bottom: 0.5rem;
+}
+
+
 /* Toast Notification styling */
 .toast-container {
   position: fixed;

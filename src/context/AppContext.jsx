@@ -190,12 +190,6 @@ export const AppProvider = ({ children }) => {
 
   // Handle Supabase OAuth session check on app initialization
   useEffect(() => {
-    console.log("Vite Env Check:", {
-      hasUrl: !!import.meta.env.VITE_SUPABASE_URL,
-      hasKey: !!import.meta.env.VITE_SUPABASE_ANON_KEY,
-      url: import.meta.env.VITE_SUPABASE_URL,
-      hasEnvConfig
-    });
     const checkSupabaseSession = async () => {
       const { supabaseUrl, supabaseKey } = cloudConfig;
       if (supabaseUrl && supabaseKey) {

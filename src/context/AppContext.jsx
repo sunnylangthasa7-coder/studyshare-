@@ -1,4 +1,5 @@
 import React, { createContext, useState, useEffect } from 'react';
+import { createClient } from '@supabase/supabase-js';
 
 export const AppContext = createContext();
 
@@ -175,6 +176,59 @@ export const AppProvider = ({ children }) => {
   useEffect(() => {
     localStorage.setItem('studyshare_notes', JSON.stringify(notes));
   }, [notes]);
+
+  // Load notes from Supabase or localStorage on mount/cloudConfig change
+  useEffect(() => {
+    const fetchNotes = async () => {
+      const { supabaseUrl, supabaseKey } = cloudConfig;
+      if (supabaseUrl && supabaseKey) {
+        try {
+          const supabase = createClient(supabaseUrl, supabaseKey);
+          const { data, error } = await supabase
+            .from('notes')
+            .select('*')
+            .order('uploaded_at', { ascending: false });
+
+          if (error) {
+            throw error;
+          }
+
+          if (data && data.length > 0) {
+            const mappedNotes = data.map(item => ({
+              id: item.id,
+              title: item.title,
+              description: item.description,
+              subject: item.subject,
+              university: item.university,
+              college: item.college,
+              price: Number(item.price),
+              rating: Number(item.rating),
+              seller: item.seller,
+              pagesCount: item.pages_count,
+              previewContent: item.preview_content,
+              fileUrl: item.file_url,
+              uploadedAt: item.uploaded_at ? new Date(item.uploaded_at).toISOString().split('T')[0] : '',
+              reviews: item.reviews || []
+            }));
+            setNotes(mappedNotes);
+          } else {
+            // Database is connected but empty, start empty (no fake notes!)
+            setNotes([]);
+          }
+        } catch (e) {
+          console.error("Error loading notes from Supabase:", e.message);
+          // Fall back to local storage cache if there is database issue
+          const saved = localStorage.getItem('studyshare_notes');
+          setNotes(saved ? JSON.parse(saved) : DEFAULT_NOTES);
+        }
+      } else {
+        // Fall back to local storage (mock offline mode)
+        const saved = localStorage.getItem('studyshare_notes');
+        setNotes(saved ? JSON.parse(saved) : DEFAULT_NOTES);
+      }
+    };
+    fetchNotes();
+  }, [cloudConfig]);
 
   useEffect(() => {
     localStorage.setItem('studyshare_platform_earnings', platformEarnings.toString());
@@ -407,14 +461,15 @@ export const AppProvider = ({ children }) => {
   };
 
   // Upload note
-  const uploadNote = (noteData) => {
+  const uploadNote = async (noteData) => {
     if (!currentUser) {
       addToast('Please log in to upload notes', 'error');
       return;
     }
 
+    const noteId = `note-${Date.now()}`;
     const newNote = {
-      id: `note-${Date.now()}`,
+      id: noteId,
       title: noteData.title,
       description: noteData.description,
       subject: noteData.subject,
@@ -430,30 +485,69 @@ export const AppProvider = ({ children }) => {
       reviews: []
     };
 
-    setNotes(prev => [newNote, ...prev]);
-    addToast('Note uploaded successfully for sale!', 'success');
+    // If Supabase is connected, save to the db table!
+    const { supabaseUrl, supabaseKey } = cloudConfig;
+    if (supabaseUrl && supabaseKey) {
+      try {
+        const supabase = createClient(supabaseUrl, supabaseKey);
+        const { error } = await supabase
+          .from('notes')
+          .insert({
+            id: newNote.id,
+            title: newNote.title,
+            description: newNote.description,
+            subject: newNote.subject,
+            university: newNote.university,
+            college: newNote.college,
+            price: newNote.price,
+            rating: newNote.rating,
+            seller: newNote.seller,
+            pages_count: newNote.pagesCount,
+            preview_content: newNote.previewContent,
+            file_url: newNote.fileUrl,
+            reviews: []
+          });
+
+        if (error) throw error;
+        
+        setNotes(prev => [newNote, ...prev]);
+        addToast('Note uploaded and saved to database!', 'success');
+      } catch (err) {
+        console.error("Error saving note to Supabase:", err.message);
+        addToast(`Failed to save to database: ${err.message}`, 'error');
+        return; // Halt redirect on failure
+      }
+    } else {
+      setNotes(prev => [newNote, ...prev]);
+      addToast('Note uploaded successfully (offline mode)!', 'success');
+    }
+
     navigateTo('marketplace');
   };
 
   // Add review to note
-  const addReview = (noteId, rating, comment) => {
+  const addReview = async (noteId, rating, comment) => {
     if (!currentUser) {
       addToast('Please login to leave reviews', 'error');
       return;
     }
     
+    const note = notes.find(n => n.id === noteId);
+    if (!note) return;
+
+    const newReview = {
+      id: `rev-${Date.now()}`,
+      user: currentUser.username,
+      rating: Number(rating),
+      comment: comment
+    };
+    const updatedReviews = [...note.reviews, newReview];
+    const avgRating = Number((updatedReviews.reduce((sum, r) => sum + r.rating, 0) / updatedReviews.length).toFixed(1));
+
+    // Update locally
     setNotes(prevNotes => {
       return prevNotes.map(n => {
         if (n.id === noteId) {
-          const newReview = {
-            id: `rev-${Date.now()}`,
-            user: currentUser.username,
-            rating: Number(rating),
-            comment: comment
-          };
-          const updatedReviews = [...n.reviews, newReview];
-          const avgRating = Number((updatedReviews.reduce((sum, r) => sum + r.rating, 0) / updatedReviews.length).toFixed(1));
-          
           return {
             ...n,
             reviews: updatedReviews,
@@ -463,11 +557,33 @@ export const AppProvider = ({ children }) => {
         return n;
       });
     });
-    addToast('Thank you for your review!', 'success');
+
+    // Save to Supabase if connected
+    const { supabaseUrl, supabaseKey } = cloudConfig;
+    if (supabaseUrl && supabaseKey) {
+      try {
+        const supabase = createClient(supabaseUrl, supabaseKey);
+        const { error } = await supabase
+          .from('notes')
+          .update({
+            reviews: updatedReviews,
+            rating: avgRating
+          })
+          .eq('id', noteId);
+
+        if (error) throw error;
+        addToast('Review submitted and saved to database!', 'success');
+      } catch (err) {
+        console.error("Error syncing review to Supabase:", err.message);
+        addToast('Review added locally (failed syncing to database).', 'warning');
+      }
+    } else {
+      addToast('Thank you for your review!', 'success');
+    }
   };
 
   // Flag copyright reports and handle seller strikes/ban triggers
-  const reportNote = (noteId, reason, details, reporterEmail) => {
+  const reportNote = async (noteId, reason, details, reporterEmail) => {
     const newReport = {
       id: `rep-${Date.now()}`,
       noteId,
@@ -480,6 +596,28 @@ export const AppProvider = ({ children }) => {
     
     setReports(prev => [...prev, newReport]);
     addToast('Note has been flagged. Our team will review the copyright claim.', 'warning');
+
+    // Save to Supabase if connected
+    const { supabaseUrl, supabaseKey } = cloudConfig;
+    if (supabaseUrl && supabaseKey) {
+      try {
+        const supabase = createClient(supabaseUrl, supabaseKey);
+        const { error } = await supabase
+          .from('reports')
+          .insert({
+            id: newReport.id,
+            note_id: newReport.noteId,
+            reason: newReport.reason,
+            details: newReport.details,
+            reporter_email: newReport.reporterEmail,
+            status: newReport.status
+          });
+
+        if (error) throw error;
+      } catch (err) {
+        console.error("Error syncing report to Supabase:", err.message);
+      }
+    }
     
     const note = notes.find(n => n.id === noteId);
     if (note) {
